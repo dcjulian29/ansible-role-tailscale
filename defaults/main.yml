@@ -1,0 +1,16 @@
+---
+tailscale_args: ""
+# OAuth key starts with 'tskey-client-', auth key starts with 'tskey-auth-', with headscale it can be 'unused'
+tailscale_authkey: ""
+tailscale_exit_node: false
+tailscale_exit_routes: []
+# - 10.10.10.10/8
+# - 192.168.0.0/24
+tailscale_exit_node_use: ""
+# Register as an ephemeral node (recommended)
+tailscale_oauth_ephemeral: true
+# Skip manual device approval
+tailscale_oauth_preauthorized: false
+tailscale_state: latest
+tailscale_tags: []
+tailscale_up_skip: false

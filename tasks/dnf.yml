@@ -1,0 +1,14 @@
+---
+- name: Install dnf dependencies
+  ansible.builtin.dnf:
+    name: "{{ tailscale_dependencies }}"
+    state: present
+
+- name: Add Tailscale dnf repository
+  ansible.builtin.command: dnf config-manager --add-repo {{ tailscale_repo }}
+  args:
+    creates: /etc/yum.repos.d/tailscale.repo
+
+- name: Update dnf cache
+  ansible.builtin.dnf:
+    update_cache: true

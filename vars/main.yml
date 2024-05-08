@@ -1,0 +1,3 @@
+---
+tailscale_package: tailscale
+tailscale_service: tailscaled

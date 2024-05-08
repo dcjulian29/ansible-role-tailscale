@@ -1,0 +1,113 @@
+---
+- name: Wait for systemd to complete initialization.  # noqa command-instead-of-module
+  ansible.builtin.command: systemctl is-system-running
+  register: systemctl_status
+  until: >
+    'running' in systemctl_status.stdout or
+    'degraded' in systemctl_status.stdout
+  retries: 30
+  delay: 5
+  when: ansible_service_mgr == 'systemd'
+  changed_when: false
+  failed_when:
+    - systemctl_status.rc != 0
+    - not (systemctl_status.rc == 1 and 'degraded' in systemctl_status.stdout )
+
+- name: Load variables based on the package manager
+  ansible.builtin.include_vars: "{{ ansible_pkg_mgr }}.yml"
+
+- name: Install dependencies based on the package manager
+  ansible.builtin.include_tasks: "{{ ansible_pkg_mgr }}.yml"
+
+- name: Install Tailscale
+  ansible.builtin.package:
+    name: "{{ tailscale_package }}"
+    state: "{{ tailscale_state }}"
+
+- name: Enable Tailscale service
+  ansible.builtin.service:
+    name: "{{ tailscale_service }}"
+    state: started
+    enabled: true
+
+- name: Fetch Tailscale status
+  ansible.builtin.command: tailscale status --json
+  changed_when: false
+  register: tailscale_status
+
+- name: Parse Tailscale status JSON
+  vars:
+    tailscale_status_parsed: "{{ tailscale_status.stdout | from_json }}"
+  ansible.builtin.set_fact:
+    tailscale_is_online: "{{  tailscale_status_parsed.Self.Online }}"
+
+- name: Prepend 'tag:' to each item in the list
+  ansible.builtin.set_fact:
+    tailscale_prepared_tags: "{{ tailscale_tags | map('regex_replace', '^', 'tag:') | list }}"
+
+- name: Build `tailscale up` arguments strings
+  ansible.builtin.set_fact:
+    tailscale_authkey_type: >-
+      {% if tailscale_authkey.startswith('tskey-client-') %}
+      OAuth Client Secret
+      {% elif tailscale_authkey.startswith('tskey-auth-') %}
+      API Token
+      {% else %}
+      Unknown token format
+      {% endif %}
+    tailscale_authkey_string: >-
+      {% if tailscale_authkey.startswith('tskey-client-') %}
+      {{ tailscale_authkey }}?ephemeral={{ tailscale_oauth_ephemeral | bool }}
+      &preauthorized={{ tailscale_oauth_preauthorized | bool }}
+      {% else %}
+      {{ tailscale_authkey }}
+      {% endif %}
+    tailscale_tags_string: >-
+      {% if tailscale_tags | length > 0 %}
+      --advertise-tags={{ tailscale_prepared_tags | join(',') }}
+      {% endif %}
+
+- name: Build the final tailscale_args
+  ansible.builtin.set_fact:
+    tailscale_args_string: "{{ tailscale_args }} {{ tailscale_tags_string | trim }} --timeout=120s"
+
+- name: Bring Tailscale up
+  ansible.builtin.command: >-
+   tailscale up {{ tailscale_args_string | trim }}
+   --authkey={{ tailscale_authkey_string | trim }}
+  changed_when: true
+  when: not tailscale_up_skip
+  async: 130
+  poll: 5
+
+- name: Enable IPv4 and IPv6 forwarding when exit node
+  ansible.posix.sysctl:
+    name: "{{ item.key }}"
+    value: "{{ item.value }}"
+    state: present
+    reload: true
+  loop:
+    - key: net.ipv4.ip_forward
+      value: 1
+    - key: net.ipv6.conf.all.forwarding
+      value: 1
+  when: tailscale_exit_node
+
+- name: Update Tailscale to be an exit node
+  ansible.builtin.command: >-
+   tailscale set
+   --advertise-routes={{ tailscale_exit_routes | join(',') }}
+   --advertise-exit-node
+  changed_when: true
+  async: 130
+  poll: 5
+  when: tailscale_exit_node
+
+- name: Update Tailscale use an exit node
+  ansible.builtin.command: >-
+   tailscale set
+   --exit-node {{ tailscale_exit_node_use }}
+  changed_when: true
+  async: 130
+  poll: 5
+  when: tailscale_exit_node_use | length > 0

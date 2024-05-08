@@ -1,0 +1,4 @@
+---
+tailscale_dependencies:
+  - python-dnf
+tailscale_repo: https://pkgs.tailscale.com/stable/fedora/tailscale.repo
