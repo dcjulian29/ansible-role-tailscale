@@ -1,6 +1,6 @@
 ---
 - name: Install yum dependencies
-  ansible.builtin.yum:
+  ansible.builtin.dnf:
     name: "{{ tailscale_dependencies }}"
     state: present
 
@@ -10,5 +10,5 @@
     creates: /etc/yum.repos.d/tailscale.repo
 
 - name: Update yum cache
-  ansible.builtin.yum:
+  ansible.builtin.dnf:
     update_cache: true
