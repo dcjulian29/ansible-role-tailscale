@@ -1,5 +1,0 @@
----
-tailscale_dependencies:
-  - yum-utils
-  - gnupg
-tailscale_repo: https://pkgs.tailscale.com/stable/centos/{{ ansible_distribution_major_version }}/tailscale.repo

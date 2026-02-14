@@ -7,24 +7,24 @@
     'degraded' in systemctl_status.stdout
   retries: 30
   delay: 5
-  when: ansible_service_mgr == 'systemd'
+  when: ansible_facts['service_mgr'] == 'systemd'
   changed_when: false
   failed_when:
     - systemctl_status.rc != 0
     - not (systemctl_status.rc == 1 and 'degraded' in systemctl_status.stdout )
 
 - name: Load variables based on the package manager
-  ansible.builtin.include_vars: "{{ ansible_pkg_mgr }}.yml"
+  ansible.builtin.include_vars: "{{ ansible_facts['pkg_mgr'] }}.yml"
 
 - name: Install dependencies based on the package manager
-  ansible.builtin.include_tasks: "{{ ansible_pkg_mgr }}.yml"
+  ansible.builtin.include_tasks: "{{ ansible_facts['pkg_mgr'] }}.yml"
 
 - name: Install Tailscale
   ansible.builtin.package:
     name: "{{ tailscale_package }}"
     state: "{{ tailscale_state }}"
 
-- name: Enable Tailscale service
+- name: Enable and start Tailscale service
   ansible.builtin.service:
     name: "{{ tailscale_service }}"
     state: started
