@@ -37,11 +37,14 @@
   check_mode: false
   register: tailscale_status
 
+# BackendState is "Running" once the node is logged in, and "NeedsLogin" on a
+# fresh install. Self.Online only says whether the coordination server can
+# reach the node right now, which can flap, so it isn't used to decide.
 - name: Parse Tailscale status JSON
   vars:
     tailscale_status_parsed: "{{ tailscale_status.stdout | from_json }}"
   ansible.builtin.set_fact:
-    tailscale_is_online: "{{  tailscale_status_parsed.Self.Online }}"
+    tailscale_is_running: "{{ tailscale_status_parsed.BackendState == 'Running' }}"
 
 - name: Prepend 'tag:' to each item in the list
   ansible.builtin.set_fact:
@@ -73,12 +76,17 @@
   ansible.builtin.set_fact:
     tailscale_args_string: "{{ tailscale_args }} {{ tailscale_tags_string | trim }} --timeout=120s"
 
+# Only log in when the node isn't already; re-running `tailscale up` on a
+# logged-in node reported a change on every play. To change tailscale_args or
+# tailscale_tags on an existing node, run `tailscale up --reset ...` by hand.
 - name: Bring Tailscale up
   ansible.builtin.command: >-
    tailscale up {{ tailscale_args_string | trim }}
    --authkey={{ tailscale_authkey_string | trim }}
   changed_when: true
-  when: not tailscale_up_skip
+  when:
+    - not tailscale_up_skip
+    - not tailscale_is_running
   async: 130
   poll: 5
 
