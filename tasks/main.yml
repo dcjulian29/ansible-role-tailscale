@@ -9,6 +9,7 @@
   delay: 5
   when: ansible_facts['service_mgr'] == 'systemd'
   changed_when: false
+  check_mode: false
   failed_when:
     - systemctl_status.rc != 0
     - not (systemctl_status.rc == 1 and 'degraded' in systemctl_status.stdout )
@@ -33,6 +34,7 @@
 - name: Fetch Tailscale status
   ansible.builtin.command: tailscale status --json
   changed_when: false
+  check_mode: false
   register: tailscale_status
 
 - name: Parse Tailscale status JSON
