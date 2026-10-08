@@ -13,6 +13,14 @@ tailscale_exit_node_use: ""
 tailscale_oauth_ephemeral: false
 # Skip manual device approval
 tailscale_oauth_preauthorized: false
+# Publish local services on https://<host>.<tailnet>.ts.net with a certificate
+# Tailscale issues. Requires MagicDNS and HTTPS certificates enabled in the
+# tailnet admin console. The role owns the node's whole serve config: when it
+# differs from this list it is reset and rebuilt, so removing an entry here
+# removes it from the node. An empty list leaves the serve config untouched.
+tailscale_serve: []
+# - port: 443                       # HTTPS port on the tailnet name
+#   target: http://127.0.0.1:2283   # local backend to proxy to
 tailscale_state: latest
 tailscale_tags: []
 tailscale_up_skip: false

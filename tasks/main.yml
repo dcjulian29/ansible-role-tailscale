@@ -60,9 +60,11 @@
       {% else %}
       Unknown token format
       {% endif %}
+    # The `-}}` matters: folding turns the line break into a space, which would
+    # split the key from `&preauthorized=` into a separate CLI argument.
     tailscale_authkey_string: >-
       {% if tailscale_authkey.startswith('tskey-client-') %}
-      {{ tailscale_authkey }}?ephemeral={{ tailscale_oauth_ephemeral | bool }}
+      {{ tailscale_authkey }}?ephemeral={{ tailscale_oauth_ephemeral | bool -}}
       &preauthorized={{ tailscale_oauth_preauthorized | bool }}
       {% else %}
       {{ tailscale_authkey }}
@@ -122,3 +124,50 @@
   async: 130
   poll: 5
   when: tailscale_exit_node_use | length > 0
+
+- name: Configure Tailscale serve
+  when: tailscale_serve | length > 0
+  block:
+    # Read-only; runs under --check so the comparison below has real data.
+    - name: Fetch Tailscale serve config
+      ansible.builtin.command: tailscale serve status --json
+      changed_when: false
+      check_mode: false
+      register: tailscale_serve_status
+
+    # Both sides become a sorted "port|path|target" string so they compare
+    # directly. The live config keys each port as "<name>.ts.net:<port>" and
+    # Tailscale stores targets as given, so write them in full
+    # (http://127.0.0.1:2283, not just 2283) or they never match.
+    - name: Compare the serve config with tailscale_serve
+      vars:
+        tailscale_serve_web: "{{ (tailscale_serve_status.stdout | from_json).Web | default({}) }}"
+      ansible.builtin.set_fact:
+        tailscale_serve_current: >-
+          {%- set ns = namespace(items=[]) -%}
+          {%- for host_port, web in tailscale_serve_web.items() -%}
+          {%- for path, handler in (web.Handlers | default({})).items() -%}
+          {%- set ns.items = ns.items + [host_port.split(':') | last ~ '|' ~ path ~ '|' ~ (handler.Proxy | default(''))] -%}
+          {%- endfor -%}
+          {%- endfor -%}
+          {{ ns.items | sort | join(',') }}
+        tailscale_serve_desired: >-
+          {%- set ns = namespace(items=[]) -%}
+          {%- for serve in tailscale_serve -%}
+          {%- set ns.items = ns.items + [serve.port ~ '|/|' ~ serve.target] -%}
+          {%- endfor -%}
+          {{ ns.items | sort | join(',') }}
+
+    - name: Reset the Tailscale serve config
+      ansible.builtin.command: tailscale serve reset
+      changed_when: true
+      when: tailscale_serve_current != tailscale_serve_desired
+
+    - name: Serve local services on the tailnet
+      ansible.builtin.command: >-
+       tailscale serve --bg --https={{ item.port }} {{ item.target }}
+      changed_when: true
+      loop: "{{ tailscale_serve }}"
+      loop_control:
+        label: "{{ item.port }} -> {{ item.target }}"
+      when: tailscale_serve_current != tailscale_serve_desired
